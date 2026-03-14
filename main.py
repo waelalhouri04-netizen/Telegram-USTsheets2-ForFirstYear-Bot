@@ -6,11 +6,14 @@ import os
 TOKEN = os.environ.get("TOKEN")
 
 FILES_DIR = "files"
-
 if not os.path.exists(FILES_DIR):
     os.makedirs(FILES_DIR)
 
+# جميع المواد تظهر دائمًا
+ALL_SUBJECTS = ["Physics", "Chemistry", "Computer", "Calculus", "Linear", "English", "Materials", "History"]
+
 def get_subjects():
+    """إرجاع قاعدة بيانات المواد والمحاضرات الموجودة"""
     subjects = {}
     for filename in os.listdir(FILES_DIR):
         if filename.endswith(".pdf"):
@@ -27,8 +30,7 @@ def get_subjects():
     return subjects
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    subjects = get_subjects()
-    buttons = [[InlineKeyboardButton(sub, callback_data=f"sub|{sub}")] for sub in subjects]
+    buttons = [[InlineKeyboardButton(sub, callback_data=f"sub|{sub}")] for sub in ALL_SUBJECTS]
     await update.message.reply_text("📚 اختر المادة", reply_markup=InlineKeyboardMarkup(buttons))
 
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -36,30 +38,46 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     data = query.data
     subjects = get_subjects()
+
+    # عند اختيار مادة
     if data.startswith("sub|"):
         subject = data.split("|")[1]
         lectures = subjects.get(subject, {})
+
+        if not lectures:
+            # رسالة إذا لا توجد محاضرات
+            buttons = [[InlineKeyboardButton("🔙 رجوع", callback_data="back")]]
+            await query.edit_message_text(
+                f"📖 {subject}\n⚠️ لا توجد محاضرات متوفرة بعد.",
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
+            return
+
         buttons = [[InlineKeyboardButton(lec, callback_data=f"lec|{subject}|{lec}")] for lec in sorted(lectures)]
         buttons.append([InlineKeyboardButton("🔙 رجوع", callback_data="back")])
         await query.edit_message_text(f"📖 {subject}", reply_markup=InlineKeyboardMarkup(buttons))
+
+    # عند اختيار محاضرة
     elif data.startswith("lec|"):
         _, subject, lecture = data.split("|")
         file = subjects.get(subject, {}).get(lecture)
         if file:
             await query.message.reply_document(open(file, "rb"))
+
+    # زر رجوع
     elif data == "back":
-        subjects = get_subjects()
-        buttons = [[InlineKeyboardButton(sub, callback_data=f"sub|{sub}")] for sub in subjects]
+        buttons = [[InlineKeyboardButton(sub, callback_data=f"sub|{sub}")] for sub in ALL_SUBJECTS]
         await query.edit_message_text("📚 اختر المادة", reply_markup=InlineKeyboardMarkup(buttons))
 
 # ضع Telegram ID الخاص بك هنا
-ALLOWED_USERS = [11277382550]
+ALLOWED_USERS = [1277382550]
 
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     if user_id not in ALLOWED_USERS:
-        await update.message.reply_text("❌ هذا البوت خاص بـ الجنخر وائل فقط")
+        await update.message.reply_text("❌ هذا البوت خاص بـ الحنخر وائل فقط")
         return
+
     file = await update.message.document.get_file()
     file_name = update.message.document.file_name
     path = os.path.join(FILES_DIR, file_name)
@@ -70,4 +88,5 @@ app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CallbackQueryHandler(button))
 app.add_handler(MessageHandler(filters.Document.ALL, handle_file))
+
 app.run_polling()
